@@ -63,7 +63,11 @@ class Store:
         return path
 
     def metadata(self, key):
-        return json.loads((self.environment(key) / 'environment.json').read_text())
+        item = json.loads((self.environment(key) / 'environment.json').read_text())
+        if not isinstance(item, dict) or item.get('id') != key:
+            raise WineError('Invalid environment metadata.')
+        text(item.get('name'))
+        return item
 
     def create(self, name):
         key = uuid.uuid4().hex
@@ -78,7 +82,9 @@ class Store:
         for path in sorted(self.environments.iterdir()):
             try:
                 item = self.metadata(path.name)
-                item['ready'] = (path / 'ready').is_file()
+                item['ready'] = (path / 'ready').is_file() and (path / 'prefix/system.reg').is_file()
+                item['directory'] = str(path)
+                item['programDirectory'] = str(path / 'prefix/drive_c') if item['ready'] else str(path)
                 environments.append(item)
             except (OSError, ValueError, WineError, KeyError, TypeError):
                 continue
@@ -94,6 +100,8 @@ class Store:
 
     def application(self, key):
         item = json.loads((self.apps / (identifier(key) + '.json')).read_text())
+        if not isinstance(item, dict) or item.get('id') != key:
+            raise WineError('Invalid application metadata.')
         self.environment(item['environment'])
         identifier(item['id'])
         text(item['name'])
@@ -148,7 +156,7 @@ class Store:
 
     def initialize(self, key, env, log):
         directory = self.environment(key)
-        if (directory / 'ready').is_file():
+        if (directory / 'ready').is_file() and (directory / 'prefix/system.reg').is_file():
             return
         print('Initializing the Windows environment…', flush=True)
         self.command([self.program('wineboot'), '--init'], env, log, timeout=120)
@@ -202,37 +210,155 @@ class Store:
             raise WineError('Select a local EXE or MSI file.')
         return file
 
+    def automatic_environment(self, path):
+        file = self.executable(path)
+        # Choose by prefix location before registration: an installed EXE
+        # must stay in the prefix where its installer wrote the registry.
+        try:
+            relative = file.relative_to(self.environments)
+        except ValueError:
+            relative = None
+        if relative and len(relative.parts) > 2 and relative.parts[1] == 'prefix':
+            key = identifier(relative.parts[0])
+            self.environment(key)
+            return key
+        # Serialize automatic environment creation across simultaneous opens.
+        with (self.root / 'automatic.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            for item in self.listing()['applications']:
+                if item['path'] == str(file):
+                    return item['environment']
+            for item in self.listing()['environments']:
+                if item.get('source') == str(file):
+                    return item['id']
+            key = self.create(file.stem[:160] or 'Windows application')
+            metadata = self.metadata(key)
+            metadata['source'] = str(file)
+            save(self.environment(key) / 'environment.json', metadata)
+            return key
+
+    def open_file(self, path):
+        # Check the runtime before allocating a prefix for an unusable launch.
+        for name in ('wine', 'wineboot', 'wineserver'):
+            self.program(name)
+        file = self.executable(path)
+        self.execute(self.automatic_environment(file), 'run', str(file))
+
+    def rename_environment(self, key, name):
+        name = text(name)
+        with self.lock(key):
+            item = self.metadata(key)
+            item['name'] = name
+            save(self.environment(key) / 'environment.json', item)
+
+    def read_log(self, key):
+        self.environment(key)
+        path = self.logs / (identifier(key) + '.log')
+        if not path.exists():
+            return ''
+        with path.open('rb') as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            stream.seek(max(0, size - 64 * 1024))
+            return stream.read(64 * 1024).decode('utf-8', errors='replace')
+
+    def desktop_path(self, app):
+        return self.data / 'applications' / ('lingmo-wine-' + identifier(app) + '.desktop')
+
+    def write_application(self, item):
+        app = identifier(item['id'])
+        directory = self.data / 'applications'
+        directory.mkdir(parents=True, exist_ok=True)
+        desktop = chr(10).join(['[Desktop Entry]', 'Type=Application',
+                    'Name=' + desktop_value(item['name']), 'Exec=lingmo-wine --launch ' + app,
+                    'Icon=application-x-executable', 'Terminal=false', 'Categories=Utility;', ''])
+        target = self.desktop_path(app)
+        temporary = target.with_name(target.name + '.' + uuid.uuid4().hex + '.tmp')
+        metadata = self.apps / (app + '.json')
+        previous = json.loads(metadata.read_text()) if metadata.exists() else None
+        try:
+            with temporary.open('x', encoding='utf-8') as output:
+                output.write(desktop)
+                output.flush()
+                os.fsync(output.fileno())
+            save(metadata, item)
+            try:
+                temporary.replace(target)
+            except OSError:
+                if previous is None:
+                    metadata.unlink(missing_ok=True)
+                else:
+                    save(metadata, previous)
+                raise
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def register(self, key, name, path):
         file = self.executable(path)
         if file.suffix.lower() != '.exe':
             raise WineError('Choose the installed application EXE, not an MSI installer.')
-        self.environment(key)
         name = text(name)
-        app = uuid.uuid4().hex
-        item = {'id': app, 'name': name, 'environment': key, 'path': str(file)}
-        save(self.apps / (app + '.json'), item)
-        directory = self.data / 'applications'
-        directory.mkdir(parents=True, exist_ok=True)
-        # Only generated hex IDs enter Exec. Display names and paths never
-        # become shell commands or desktop field codes.
-        desktop = chr(10).join(['[Desktop Entry]', 'Type=Application',
-                    'Name=' + desktop_value(name), 'Exec=lingmo-wine --launch ' + app,
-                    'Icon=application-x-executable', 'Terminal=false', 'Categories=Utility;', ''])
-        (directory / ('lingmo-wine-' + app + '.desktop')).write_text(desktop, encoding='utf-8')
-        return app
+        with self.lock(key):
+            # Registering the same installed program again updates its entry,
+            # preserving launcher pins instead of creating duplicates.
+            existing = next((item for item in self.listing()['applications']
+                             if item['environment'] == key and item['path'] == str(file)), None)
+            app = existing['id'] if existing else uuid.uuid4().hex
+            self.write_application({'id': app, 'name': name, 'environment': key, 'path': str(file)})
+            return app
+
+    def edit_application(self, app, name, path):
+        item = self.application(app)
+        file = self.executable(path)
+        if file.suffix.lower() != '.exe':
+            raise WineError('Choose an EXE file for the application.')
+        name = text(name)
+        with self.lock(item['environment']):
+            item.update(name=name, path=str(file))
+            self.write_application(item)
+
+    def remove_application(self, app):
+        item = self.application(app)
+        with self.lock(item['environment']):
+            # Only our launcher and its metadata are removed. Installed files,
+            # prefixes and user documents are never deleted by this operation.
+            metadata = self.apps / (identifier(app) + '.json')
+            backup = self.root / 'removed-applications'
+            backup.mkdir(mode=0o700, exist_ok=True)
+            save(backup / (app + '.json'), item)
+            self.desktop_path(app).unlink(missing_ok=True)
+            metadata.unlink()
+
+    def restore_application(self, app):
+        backup = self.root / 'removed-applications' / (identifier(app) + '.json')
+        item = json.loads(backup.read_text())
+        if not isinstance(item, dict) or item.get('id') != app:
+            raise WineError('Invalid application backup.')
+        text(item.get('name'))
+        self.executable(item['path'])
+        with self.lock(item['environment']):
+            if (self.apps / (app + '.json')).exists():
+                raise WineError('Application already exists.')
+            self.write_application(item)
+            backup.unlink()
 
 
 def main():
     parser = argparse.ArgumentParser(description='Lingmo Wine environment helper')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('list')
+    sub.add_parser('open').add_argument('path')
     create = sub.add_parser('create'); create.add_argument('name')
-    for name in ('initialize', 'configure', 'uninstall', 'stop'):
+    for name in ('initialize', 'configure', 'uninstall', 'stop', 'log'):
         command = sub.add_parser(name); command.add_argument('environment')
     run = sub.add_parser('run'); run.add_argument('environment'); run.add_argument('path')
     register = sub.add_parser('register')
     register.add_argument('environment'); register.add_argument('name'); register.add_argument('path')
     launch = sub.add_parser('launch'); launch.add_argument('application')
+    rename = sub.add_parser('rename'); rename.add_argument('environment'); rename.add_argument('name')
+    edit = sub.add_parser('edit'); edit.add_argument('application'); edit.add_argument('name'); edit.add_argument('path')
+    for action in ('remove', 'restore'):
+        sub.add_parser(action).add_argument('application')
     args = parser.parse_args()
     os.umask(0o077)
     # Wine must always run as the desktop user.
@@ -242,10 +368,22 @@ def main():
         store = Store()
         if args.command == 'list':
             print(json.dumps(store.listing(), ensure_ascii=False))
+        elif args.command == 'open':
+            store.open_file(args.path)
         elif args.command == 'create':
             print(json.dumps({'id': store.create(args.name)}))
         elif args.command == 'register':
             print(json.dumps({'id': store.register(args.environment, args.name, args.path)}))
+        elif args.command == 'log':
+            print(store.read_log(args.environment), end='')
+        elif args.command == 'rename':
+            store.rename_environment(args.environment, args.name)
+        elif args.command == 'edit':
+            store.edit_application(args.application, args.name, args.path)
+        elif args.command == 'remove':
+            store.remove_application(args.application)
+        elif args.command == 'restore':
+            store.restore_application(args.application)
         elif args.command == 'launch':
             app = store.application(args.application)
             store.execute(app['environment'], 'run', app['path'])

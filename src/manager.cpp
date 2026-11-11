@@ -179,18 +179,37 @@ Manager::Manager(bool load)
 
     auto *applications = columns[1];
     m_apps = applications->addChild<ComboBox>();
+    m_apps->setName("registered-applications");
     m_apps->setLayoutHints({.fillWidth = true});
     auto *launchButton = applications->addChild<Button>(tr("Launch"));
     m_buttons[Action::Launch] = launchButton;
-    auto *shortcutHint = applications->addChild<Label>(tr("After installation, select the installed EXE on the Install / Run page, then name it here."));
+    m_applicationEnvironment = applications->addChild<Label>();
+    m_applicationEnvironment->setWrap(true);
+    m_applicationEnvironment->setLayoutHints({.fillWidth = true});
+    auto *shortcutHint = applications->addChild<Label>(tr("Choose an installed EXE to add an application, or edit the selected entry below."));
     shortcutHint->setWrap(true); shortcutHint->setLayoutHints({.fillWidth = true});
     m_name = applications->addChild<TextField>();
     m_name->setPlaceholder(tr("Application name"));
     m_name->setLayoutHints({.fillWidth = true});
+    auto *appFiles = applications->addChild<Row>();
+    appFiles->setSpacing(12); appFiles->setLayoutHints({.fillWidth = true});
+    m_applicationFile = appFiles->addChild<TextField>();
+    m_applicationFile->setName("installed-executable");
+    m_applicationFile->setPlaceholder(tr("Installed EXE path"));
+    m_applicationFile->setLayoutHints({.fillWidth = true});
+    m_buttons[Action::BrowseInstalled] = appFiles->addChild<Button>(tr("Choose EXE…"));
     auto *shortcut = applications->addChild<Button>(tr("Add to launcher"));
     m_buttons[Action::Register] = shortcut;
+    m_buttons[Action::SaveApplication] = applications->addChild<Button>(tr("Save changes"));
+    m_buttons[Action::RemoveApplication] = applications->addChild<Button>(tr("Remove launcher entry"));
+    m_buttons[Action::RestoreApplication] = applications->addChild<Button>(tr("Undo removal"));
+    auto *removalHint = applications->addChild<Label>(tr("Removing an entry keeps the installed program and its environment."));
+    removalHint->setWrap(true); removalHint->setLayoutHints({.fillWidth = true});
 
     auto *environments = columns[2];
+    m_environmentStatus = environments->addChild<Label>();
+    m_environmentStatus->setName("environment-status");
+    m_environmentStatus->setWrap(true); m_environmentStatus->setLayoutHints({.fillWidth = true});
     auto *environmentHint = environments->addChild<Label>(tr("Create an environment for each application, or reuse one for related programs."));
     environmentHint->setWrap(true); environmentHint->setLayoutHints({.fillWidth = true});
     auto *environmentName = environments->addChild<TextField>();
@@ -200,6 +219,8 @@ Manager::Manager(bool load)
     environmentName->setLayoutHints({.fillWidth = true});
     auto *create = environments->addChild<Button>(tr("Create environment"));
     m_buttons[Action::Create] = create;
+    m_buttons[Action::RenameEnvironment] = environments->addChild<Button>(tr("Rename environment"));
+    m_buttons[Action::OpenEnvironment] = environments->addChild<Button>(tr("Open environment folder"));
     for (const auto &[label, command] : std::vector<std::pair<std::string, std::string>>{
              {tr("Wine settings"), "configure"}, {tr("Uninstall programs"), "uninstall"}}) {
         auto *button = environments->addChild<Button>(label);
@@ -211,8 +232,10 @@ Manager::Manager(bool load)
     // Logs occupy their own page; changing pages never rebuilds the task or
     // its text buffer. The page viewport sizes this area on every layout.
     m_log = columns[3]->addChild<TextArea>();
+    m_log->setName("environment-log");
     m_log->setReadOnly(true);
     m_log->setLayoutHints({.fillWidth = true, .preferredHeight = 380});
+    m_buttons[Action::ReadLog] = columns[3]->addChild<Button>(tr("Read environment log"));
     auto *logs = columns[3]->addChild<Button>(tr("Open logs"));
     m_buttons[Action::Logs] = logs;
     m_window.setContentView(std::move(root));
@@ -223,12 +246,13 @@ Manager::Manager(bool load)
     };
     for (const auto &[action, button] : m_buttons)
         button->onClicked = [this, action] { trigger(action); };
-    for (auto *field : {m_file, m_name, m_environmentName})
+    for (auto *field : {m_file, m_name, m_environmentName, m_applicationFile})
         field->onTextChanged = [this] { updateActions(); };
     m_file->setName("application-path");
     m_name->setName("application-name");
-    m_environments->onActivated = [this](int) { updateActions(); };
-    m_apps->onActivated = [this](int) { updateActions(); };
+    m_environments->setName("environments");
+    m_environments->onActivated = [this](int) { selectEnvironment(); };
+    m_apps->onActivated = [this](int) { selectApplication(); };
     m_window.addShortcut(ControlModifier, 'o', [this] { trigger(Action::Browse); });
     m_window.addShortcut(ControlModifier, 'q', [this] { trigger(Action::Quit); });
     m_window.addShortcut(ControlModifier, 'l', [this] { showPage(3); });
@@ -270,31 +294,58 @@ void Manager::append(std::string_view text)
 
 void Manager::refresh(const std::string &preferred)
 {
-    if (m_read.isRunning()) return;
+    if (m_read.isRunning()) {
+        m_refreshPending = true;
+        if (!preferred.empty()) m_pendingEnvironment = preferred;
+        return;
+    }
     m_metadataLoading = true;
     updateActions();
     const std::string selected = preferred.empty() ? environment() : preferred;
-    m_read.onFinished = [this, selected](int code, bool) {
+    const std::string selectedApp = preferred.empty() ? selectedApplication() : std::string();
+    m_read.onFinished = [this, selected, selectedApp](int code, bool) {
         m_metadataLoading = false;
+        if (m_refreshPending) {
+            m_refreshPending = false;
+            const std::string pending = std::exchange(m_pendingEnvironment, {});
+            // A timer defers reuse of Process until its current completion returns.
+            m_refreshTimer.onTimeout = [this, pending] { refresh(pending); };
+            m_refreshTimer.setSingleShot(true);
+            m_refreshTimer.start(std::chrono::milliseconds(0));
+        }
         auto data = base::json::Value::parse(m_read.standardOutput());
         if (code || !data) {
             m_status->setText(tr("Could not read Wine environments."));
             append(m_read.standardError()); updateActions(); return;
         }
-        m_ids.clear(); std::vector<std::string> names;
+        m_ids.clear(); m_environmentNames.clear(); m_environmentDirectories.clear();
+        m_programDirectories.clear(); m_environmentReady.clear();
+        std::vector<std::string> names;
         int index = 0;
         for (const auto &item : (*data)["environments"].toArray()) {
             if (item["id"].toString() == selected) index = int(names.size());
             m_ids.push_back(item["id"].toString()); names.push_back(item["name"].toString());
+            m_environmentNames.push_back(item["name"].toString());
+            m_environmentDirectories.push_back(item["directory"].toString());
+            m_programDirectories.push_back(item["programDirectory"].toString());
+            m_environmentReady.push_back(item["ready"].toBool());
         }
         m_environments->setItems(names); m_environments->setCurrentIndex(names.empty() ? -1 : index);
-        m_appIds.clear(); m_appEnvironments.clear(); names.clear();
+        m_appIds = {""}; m_appEnvironments = {""}; m_appNames = {""}; m_appPaths = {""};
+        names = {tr("Select an application…")};
+        int appIndex = 0;
         for (const auto &item : (*data)["applications"].toArray()) {
+            if (item["id"].toString() == selectedApp) appIndex = int(names.size());
             m_appIds.push_back(item["id"].toString());
+            m_appNames.push_back(item["name"].toString());
+            m_appPaths.push_back(item["path"].toString());
             m_appEnvironments.push_back(item["environment"].toString());
             names.push_back(item["name"].toString());
         }
-        m_apps->setItems(names); m_apps->setCurrentIndex(names.empty() ? -1 : 0);
+        m_apps->setItems(names); m_apps->setCurrentIndex(appIndex);
+        if (appIndex > 0) selectApplication();
+        else m_applicationEnvironment->setText(tr("No registered application selected"));
+        selectEnvironment();
         m_wineAvailable = (*data)["wineAvailable"].toBool();
         updateActions();
         if (!m_wineAvailable)
@@ -313,6 +364,8 @@ std::string Manager::environment() const
 void Manager::perform(std::vector<std::string> arguments, std::function<void()> done)
 {
     if (m_task.isRunning()) { m_status->setText(tr("An operation is already running.")); return; }
+    m_logRead.onFinished = {};
+    m_logRead.kill();
     m_log->setText({}); m_status->setText(tr("Working…"));
     m_task.onStandardOutput = [this](std::string_view s) { append(s); };
     m_task.onStandardError = [this](std::string_view s) { append(s); };
@@ -322,6 +375,8 @@ void Manager::perform(std::vector<std::string> arguments, std::function<void()> 
         m_status->setText(code || crashed ? tr("Operation failed. See the details and logs.") : tr("Finished"));
         // Follow-ups only refresh the separate metadata process.
         if (!code && !crashed && done) done();
+        else if (!code && !crashed) refresh();
+        if (code || crashed) showPage(3);
     };
     arguments.insert(arguments.begin(), WINE_HELPER);
     if (!m_task.start("/usr/bin/python3", arguments)) {
@@ -338,23 +393,38 @@ void Manager::runFile(const std::string &operation)
     if (operation == "run") args.push_back(m_file->text());
     perform(args);
 }
-void Manager::choose()
+void Manager::choose(bool installed)
 {
+    if (m_chooser && m_chooser->isOpen()) return;
     m_chooser = std::make_unique<FileChooser>(&m_window);
     m_chooser->setFilters({{tr("Windows applications"), {"*.exe", "*.msi", "*.EXE", "*.MSI"}, {}}});
-    m_chooser->onAccepted = [this](const auto &paths, const auto &) { if (!paths.empty()) openFile(paths.front()); };
+    const std::string target = environment();
+    if (installed) {
+        m_chooser->setFilters({{tr("Windows applications"), {"*.exe", "*.EXE"}, {}}});
+        const int index = m_environments->currentIndex();
+        if (index >= 0 && size_t(index) < m_programDirectories.size())
+            m_chooser->setCurrentFolder(m_programDirectories[index]);
+    }
+    m_chooser->onAccepted = [this, installed, target](const auto &paths, const auto &) {
+        if (paths.empty()) return;
+        if (!installed) { openFile(paths.front()); return; }
+        if (environment() != target) return;
+        m_applicationFile->setText(paths.front());
+        if (m_name->text().empty()) m_name->setText(std::filesystem::path(paths.front()).stem().string());
+        updateActions();
+    };
     m_chooser->open();
 }
 void Manager::openFile(const std::string &path)
 {
     m_file->setText(path);
-    m_name->setText(std::filesystem::path(path).stem().string());
+
     m_status->setText(tr("Select an environment, then choose Install / Run."));
     showPage(0);
 }
 void Manager::launch(const std::string &id)
 {
-    if (m_task.isRunning()) return;
+    if (m_task.isRunning() || id.empty()) return;
     const auto it = std::find(m_appIds.begin(), m_appIds.end(), id);
     if (it == m_appIds.end()) return;
     m_runningEnvironment = m_appEnvironments[size_t(it - m_appIds.begin())];
@@ -368,7 +438,7 @@ Manager::~Manager()
     m_menuAvailability.reset();
     m_globalMenu.reset();
     m_localMenu.reset();
-    for (auto *process : {&m_task, &m_read, &m_stop}) {
+    for (auto *process : {&m_task, &m_read, &m_stop, &m_logRead}) {
         process->onFinished = {};
         process->onStandardOutput = {};
         process->onStandardError = {};
@@ -387,17 +457,28 @@ bool Manager::canPerform(Action action) const
     // The helper validates actual file existence before running Wine.
     auto suffix = std::filesystem::path(m_file->text()).extension().string();
     std::transform(suffix.begin(), suffix.end(), suffix.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    auto installedSuffix = std::filesystem::path(m_applicationFile->text()).extension().string();
+    std::transform(installedSuffix.begin(), installedSuffix.end(), installedSuffix.begin(),
+                   [](unsigned char c) { return char(std::tolower(c)); });
     const bool selected = !environment().empty();
     switch (action) {
     case Action::Browse: return idle;
     case Action::Run: return idle && m_wineAvailable && selected && (suffix == ".exe" || suffix == ".msi");
-    case Action::Register: return idle && selected && suffix == ".exe" && validName(m_name->text());
+    case Action::Register: return idle && selected && installedSuffix == ".exe" && validName(m_name->text());
+    case Action::SaveApplication: return idle && !selectedApplication().empty()
+            && installedSuffix == ".exe" && validName(m_name->text());
+    case Action::RemoveApplication: return idle && !selectedApplication().empty();
+    case Action::RestoreApplication: return idle && !m_removedApplication.empty();
+    case Action::BrowseInstalled:
+    case Action::OpenEnvironment: return idle && selected;
+    case Action::RenameEnvironment: return idle && selected && validName(m_environmentName->text());
+    case Action::Refresh: return idle;
+    case Action::ReadLog: return idle && selected && !m_logRead.isRunning();
     case Action::Create: return idle && validName(m_environmentName->text());
     case Action::Configure:
     case Action::Uninstall: return idle && m_wineAvailable && selected;
     case Action::Stop: return !m_stop.isRunning() && m_wineAvailable && (!m_runningEnvironment.empty() || selected);
-    case Action::Launch: return idle && m_wineAvailable && m_apps->currentIndex() >= 0
-            && size_t(m_apps->currentIndex()) < m_appIds.size();
+    case Action::Launch: return idle && m_wineAvailable && !selectedApplication().empty();
     case Action::Logs: return true;
     case Action::Quit: return !m_task.isRunning() && !m_stop.isRunning();
     }
@@ -411,11 +492,37 @@ void Manager::trigger(Action action)
     if (!canPerform(action)) return;
     switch (action) {
     case Action::Browse: choose(); break;
+    case Action::BrowseInstalled: choose(true); break;
+    case Action::SaveApplication:
+        perform({"edit", selectedApplication(), m_name->text(), m_applicationFile->text()}, [this] { refresh(); }); break;
+    case Action::RemoveApplication: {
+        const std::string id = selectedApplication();
+        perform({"remove", id}, [this, id] { m_removedApplication = id; refresh(); }); break;
+    }
+    case Action::RestoreApplication:
+        perform({"restore", m_removedApplication}, [this] { m_removedApplication.clear(); refresh(); }); break;
+    case Action::RenameEnvironment:
+        perform({"rename", environment(), m_environmentName->text()}, [this] { refresh(); }); break;
+    case Action::OpenEnvironment:
+        base::Process::startDetached("xdg-open", {m_environmentDirectories[m_environments->currentIndex()]}); break;
+    case Action::Refresh: refresh(); break;
+    case Action::ReadLog: {
+        const std::string target = environment();
+        m_logRead.onFinished = [this, target](int code, bool) {
+            updateActions();
+            if (environment() != target) return;
+            m_log->setText(code ? m_logRead.standardError() : m_logRead.standardOutput());
+            showPage(3);
+        };
+        if (!m_logRead.start("/usr/bin/python3", {WINE_HELPER, "log", target}))
+            m_status->setText(tr("Could not start the Wine helper."));
+        updateActions(); break;
+    }
     case Action::Run: runFile("run"); break;
     case Action::Configure: runFile("configure"); break;
     case Action::Uninstall: runFile("uninstall"); break;
     case Action::Register:
-        perform({"register", environment(), m_name->text(), m_file->text()}, [this] { refresh(); }); break;
+        perform({"register", environment(), m_name->text(), m_applicationFile->text()}, [this] { refresh(); }); break;
     case Action::Create:
         perform({"create", m_environmentName->text()}, [this] {
             const auto created = base::json::Value::parse(m_task.standardOutput());
@@ -445,6 +552,10 @@ void Manager::updateActions()
 {
     if (m_updatingActions) return;
     m_updatingActions = true;
+    const bool editable = !m_task.isRunning() && !m_stop.isRunning() && !m_metadataLoading;
+    m_environments->setEnabled(editable);
+    m_apps->setEnabled(editable);
+    for (auto *field : {m_file, m_name, m_environmentName, m_applicationFile}) field->setEnabled(editable);
     for (const auto &[action, button] : m_buttons) button->setEnabled(canPerform(action));
     if (m_globalMenu) m_globalMenu->update();
     m_updatingActions = false;
@@ -464,7 +575,8 @@ std::vector<Wine::GlobalMenu::Entry> Manager::menuEntries()
                      item(tr("Quit"), Action::Quit, {"Control", "q"})};
     Entry environmentMenu; environmentMenu.label = tr("Environment");
     environmentMenu.children = {item(tr("Create environment"), Action::Create), item(tr("Wine settings"), Action::Configure),
-        item(tr("Uninstall programs"), Action::Uninstall), item(tr("Stop environment"), Action::Stop)};
+        item(tr("Uninstall programs"), Action::Uninstall), item(tr("Stop environment"), Action::Stop),
+        item(tr("Rename environment"), Action::RenameEnvironment), item(tr("Open environment folder"), Action::OpenEnvironment)};
     Entry view; view.label = tr("View");
     const std::vector<std::string> titles{tr("Install / Run"), tr("Registered applications"), tr("Environments"), tr("Logs")};
     for (int i = 0; i < 4; ++i) {
@@ -472,7 +584,10 @@ std::vector<Wine::GlobalMenu::Entry> Manager::menuEntries()
         page.action = [this, i] { showPage(i); }; view.children.push_back(std::move(page));
     }
     Entry application; application.label = tr("Applications");
-    application.children = {item(tr("Launch"), Action::Launch), item(tr("Open logs"), Action::Logs)};
+    application.children = {item(tr("Launch"), Action::Launch), item(tr("Choose EXE…"), Action::BrowseInstalled),
+        item(tr("Save changes"), Action::SaveApplication), item(tr("Remove launcher entry"), Action::RemoveApplication),
+        item(tr("Undo removal"), Action::RestoreApplication), item(tr("Refresh"), Action::Refresh),
+        item(tr("Read environment log"), Action::ReadLog), item(tr("Open logs"), Action::Logs)};
     return {file, environmentMenu, view, application};
 }
 
@@ -490,4 +605,55 @@ void Manager::openMenu()
         }
     }
     m_localMenu->popupFor(m_menuButton);
+}
+
+std::string Manager::selectedApplication() const
+{
+    const int index = m_apps->currentIndex();
+    return index >= 0 && size_t(index) < m_appIds.size() ? m_appIds[index] : std::string();
+}
+
+void Manager::selectApplication()
+{
+    const int index = m_apps->currentIndex();
+    if (index <= 0 || size_t(index) >= m_appIds.size()) {
+        m_applicationEnvironment->setText(tr("No registered application selected"));
+        updateActions();
+        return;
+    }
+    m_name->setText(m_appNames[index]);
+    m_applicationFile->setText(m_appPaths[index]);
+    const auto env = std::find(m_ids.begin(), m_ids.end(), m_appEnvironments[index]);
+    if (env != m_ids.end()) {
+        m_environments->setCurrentIndex(int(env - m_ids.begin()));
+        selectEnvironment();
+        m_applicationEnvironment->setText(tr("Environment") + std::string(": ") + m_environmentNames[env - m_ids.begin()]);
+    }
+    updateActions();
+}
+
+void Manager::selectEnvironment()
+{
+    const int index = m_environments->currentIndex();
+    if (index >= 0 && size_t(index) < m_ids.size()) {
+        const int appIndex = m_apps->currentIndex();
+        if (appIndex > 0 && size_t(appIndex) < m_appEnvironments.size()
+            && m_appEnvironments[appIndex] != m_ids[index]) {
+            m_apps->setCurrentIndex(0);
+            m_applicationEnvironment->setText(tr("No registered application selected"));
+        }
+        m_environmentName->setText(m_environmentNames[index]);
+        m_environmentStatus->setText(m_environmentReady[index] ? tr("Ready to run Windows applications")
+                : tr("This environment will be initialized on first use."));
+    } else {
+        m_environmentStatus->setText(tr("Create an environment to get started."));
+    }
+    updateActions();
+}
+
+void Manager::showFailure(const std::string &details)
+{
+    m_status->setText(tr("Could not start the Windows application. See the details below."));
+    m_log->setText(details);
+    showPage(3);
 }

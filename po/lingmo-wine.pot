@@ -126,3 +126,54 @@ msgstr ""
 
 msgid "Applications"
 msgstr ""
+
+msgid "Choose an installed EXE to add an application, or edit the selected entry below."
+msgstr ""
+
+msgid "Installed EXE path"
+msgstr ""
+
+msgid "Choose EXE…"
+msgstr ""
+
+msgid "Save changes"
+msgstr ""
+
+msgid "Remove launcher entry"
+msgstr ""
+
+msgid "Undo removal"
+msgstr ""
+
+msgid "Removing an entry keeps the installed program and its environment."
+msgstr ""
+
+msgid "Rename environment"
+msgstr ""
+
+msgid "Open environment folder"
+msgstr ""
+
+msgid "No registered application selected"
+msgstr ""
+
+msgid "Refresh"
+msgstr ""
+
+msgid "Ready to run Windows applications"
+msgstr ""
+
+msgid "This environment will be initialized on first use."
+msgstr ""
+
+msgid "Create an environment to get started."
+msgstr ""
+
+msgid "Read environment log"
+msgstr ""
+
+msgid "Select an application…"
+msgstr ""
+
+msgid "Could not start the Windows application. See the details below."
+msgstr ""

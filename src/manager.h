@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "base/process.h"
+#include "base/timer.h"
 #include "globalmenu.h"
 #include "ui/button.h"
 #include "ui/menu.h"
@@ -19,10 +20,11 @@ class Manager
 public:
     explicit Manager(bool load = true);
     ~Manager();
-    enum class Action { Browse, Run, Register, Create, Configure, Uninstall, Stop, Launch, Logs, Quit };
+    enum class Action { Browse, Run, Register, Create, Configure, Uninstall, Stop, Launch, Logs, Quit, BrowseInstalled, SaveApplication, RemoveApplication, RestoreApplication, RenameEnvironment, OpenEnvironment, Refresh, ReadLog };
     bool canPerform(Action action) const;
     void trigger(Action action);
     void openFile(const std::string &path);
+    void showFailure(const std::string &details);
     void launch(const std::string &id);
     void showPage(int page);
     Lingmo::ui::Window &window() { return m_window; }
@@ -33,7 +35,10 @@ private:
     void refresh(const std::string &preferred = {});
     void perform(std::vector<std::string> arguments, std::function<void()> done = {});
     void runFile(const std::string &operation);
-    void choose();
+    void choose(bool installed = false);
+    std::string selectedApplication() const;
+    void selectApplication();
+    void selectEnvironment();
     std::string environment() const;
     void append(std::string_view text);
     Lingmo::ui::Window m_window;
@@ -55,6 +60,18 @@ private:
     Lingmo::ui::ComboBox *m_apps;
     Lingmo::ui::TextField *m_name;
     Lingmo::ui::TextField *m_file;
+    Lingmo::ui::TextField *m_applicationFile;
+    Lingmo::ui::Label *m_environmentStatus;
+    Lingmo::ui::Label *m_applicationEnvironment;
+    std::vector<std::string> m_environmentNames;
+    std::vector<std::string> m_environmentDirectories;
+    std::vector<std::string> m_programDirectories;
+    std::vector<bool> m_environmentReady;
+    std::vector<std::string> m_appNames;
+    std::vector<std::string> m_appPaths;
+    std::string m_removedApplication;
+    bool m_refreshPending = false;
+    std::string m_pendingEnvironment;
     Lingmo::ui::Label *m_status;
     Lingmo::ui::TextArea *m_log;
     std::vector<std::string> m_ids;
@@ -64,5 +81,7 @@ private:
     Lingmo::base::Process m_task;
     Lingmo::base::Process m_stop;
     Lingmo::base::Process m_read;
+    Lingmo::base::Process m_logRead;
+    Lingmo::base::Timer m_refreshTimer;
     std::unique_ptr<Lingmo::ui::FileChooser> m_chooser;
 };

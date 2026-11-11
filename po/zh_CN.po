@@ -126,3 +126,54 @@ msgstr "视图"
 
 msgid "Applications"
 msgstr "应用"
+
+msgid "Choose an installed EXE to add an application, or edit the selected entry below."
+msgstr "选择已安装的 EXE 来添加应用，或编辑下方选中的条目。"
+
+msgid "Installed EXE path"
+msgstr "已安装的 EXE 路径"
+
+msgid "Choose EXE…"
+msgstr "选择 EXE…"
+
+msgid "Save changes"
+msgstr "保存修改"
+
+msgid "Remove launcher entry"
+msgstr "移除启动器条目"
+
+msgid "Undo removal"
+msgstr "撤销移除"
+
+msgid "Removing an entry keeps the installed program and its environment."
+msgstr "移除条目会保留已安装程序及其运行环境。"
+
+msgid "Rename environment"
+msgstr "重命名环境"
+
+msgid "Open environment folder"
+msgstr "打开环境目录"
+
+msgid "No registered application selected"
+msgstr "未选择已注册应用"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Ready to run Windows applications"
+msgstr "环境已初始化，可以运行 Windows 应用"
+
+msgid "This environment will be initialized on first use."
+msgstr "此环境将在首次使用时初始化。"
+
+msgid "Create an environment to get started."
+msgstr "请先创建运行环境。"
+
+msgid "Read environment log"
+msgstr "读取环境日志"
+
+msgid "Select an application…"
+msgstr "选择应用…"
+
+msgid "Could not start the Windows application. See the details below."
+msgstr "无法启动 Windows 应用，请查看下方详情。"

@@ -1,0 +1,5 @@
+[Default Applications]
+application/x-msdownload=lingmo-wine.desktop;
+application/x-ms-dos-executable=lingmo-wine.desktop;
+application/vnd.microsoft.portable-executable=lingmo-wine.desktop;
+application/x-msi=lingmo-wine.desktop;

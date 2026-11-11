@@ -4,17 +4,22 @@
 Python Wine runner. It uses the distribution Wine packages; it does not install
 or download Wine itself, run code as root, or start a permanent service.
 
-Open an EXE/MSI via the file manager's **Open With → Windows Applications**, or
-start the manager from the launcher. Select **Create environment**, then
-**Browse… → Install / Run**. Use a separate 64-bit prefix per application,
-or share an environment for programs that need the same registry. Once installed,
-select its executable in the prefix's `drive_c` and **Add to launcher**; the
-resulting entry appears in the launcher and can be pinned to Dock. `Wine
-settings` opens winecfg, `Uninstall programs` opens Wine's uninstaller, and
-`Stop environment` kills only that prefix's wineserver. Logs are in
-`~/.local/share/lingmo/wine/logs`. The manager remains open during a running
-program, so the operation can report its exit status. Launcher entries use a
-helper process without showing the manager window.
+Double-click an EXE or MSI to run it directly. `lingmo-wine FILE` and
+`lingmo-wine --open FILE` initialize or reuse an environment without opening
+the manager or asking the user to select a prefix. MSI files run through
+`wine msiexec /i`. A file inside a managed prefix always uses that prefix;
+otherwise an existing registration is preferred, then an automatic environment
+associated with the canonical file path. Each new external file gets its own
+environment. Renaming/moving an external file can create a new environment;
+register it explicitly when it must keep a particular environment. If more
+than one registration uses the same path, use its launcher entry to choose
+unambiguously. On failure the manager opens the log page with the helper error.
+Successful launches need no display connection from the manager itself.
+
+Start Windows Applications without a file for advanced environment management.
+It supports installation into a selected environment, Wine settings, uninstall,
+launcher registration, per-environment stop, and logs. Registered launchers
+remain usable from the desktop and Dock.
 
 A selected Windows installer may install application files under the prefix;
 look for its EXE in `environments/<id>/prefix/drive_c/` afterward. The helper
@@ -39,8 +44,9 @@ installs it. A 64-bit-only host can run supported 64-bit executables, but
 32-bit support should be verified against the chosen Wine package version.
 Xwayland is needed for Wine's Windows to show inside the Wayland session.
 
-Installing this package adds file associations but does not force a default
-handler for EXE/MSI. A file with another handler can still use Open With.
+The installed `lingmo-mimeapps.list` makes this the Lingmo desktop default for
+EXE/MSI. Existing higher-priority user MIME preferences are preserved; users
+with an explicit different default can change it using Open With.
 
 ## Status and deployment
 
@@ -53,8 +59,8 @@ with this work. The hook runs only inside the image build, enables i386, then
 installs wine32 and 32-bit Mesa/OpenGL/Vulkan libraries. It intentionally fails
 if dependency installation fails. The separate simple-cdd pipeline is not changed.
 
-The manager is available through its own desktop file; no system-wide default
-MIME handler is overwritten. Its command line also accepts a local path or
+The manager is available through its own desktop file; the package also
+provides Lingmo-specific default MIME associations. Its command line also accepts a local path or
 `--open FILE`, and `--launch ID` starts a registered application without an
 extra manager window. AppRuntime launches these desktop entries normally;
 Windows-window matching and per-program Dock icons depend on Wine's window
@@ -104,3 +110,26 @@ validates paths and locks prefixes; UI validation is not a replacement for it.
 D-Bus tests exercise successful/rejected registration, owner loss/restart,
 disabled/hidden actions and menu-state updates. Real status bar display still
 requires a live Lingmo session check.
+
+## Managing installed applications
+
+The application editor now has its own EXE path field, independent of the
+installer on Install / Run. Choosing a registered application loads its name,
+path and actual environment. Save changes updates that ID, preserving pins.
+Adding the same EXE in the same environment again updates the existing entry
+instead of making a duplicate. Another environment may register the same EXE
+independently. Rename environment changes only its display name.
+
+Remove launcher entry removes only the generated desktop file and registration;
+it does not uninstall or delete the EXE or prefix. Undo removal restores the
+most recently removed entry in this manager session. Backups also persist in
+`lingmo/wine/removed-applications/`; the helper's `restore ID` command can restore
+one later if the executable still exists. Use Wine's Uninstall programs to
+actually uninstall software. Metadata changes acquire the environment lock
+and reject requests while a managed program is running in that environment.
+
+Read environment log loads at most the last 64 KiB asynchronously; switching
+environments drops stale results. Inputs and selectors are locked while an
+operation runs. Failure automatically opens the log page. The new management
+integration test drives the real helper against temporary files to verify
+rename/register/edit/remove/undo/create-selection/log-read without Wine.
