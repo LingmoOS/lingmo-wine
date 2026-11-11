@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Windows Applications
+Name[zh_CN]=Windows 应用
+Comment=Install and manage Windows applications with Wine
+Comment[zh_CN]=使用 Wine 安装和管理 Windows 应用
+Exec=lingmo-wine %f
+Icon=lingmo-wine
+Terminal=false
+Categories=Utility;
+MimeType=application/x-ms-dos-executable;application/x-msdownload;application/x-msi;application/vnd.microsoft.portable-executable;

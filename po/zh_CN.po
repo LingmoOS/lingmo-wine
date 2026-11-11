@@ -1,0 +1,92 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Windows Applications"
+msgstr "Windows 应用"
+
+msgid "Create an environment for each application, or reuse one for related programs."
+msgstr "为每个应用创建独立环境，相关程序也可以共用同一个环境。"
+
+msgid "Environment"
+msgstr "运行环境"
+
+msgid "Environment or application name"
+msgstr "环境或应用名称"
+
+msgid "Create environment"
+msgstr "创建环境"
+
+msgid "Select an EXE or MSI file"
+msgstr "选择 EXE 或 MSI 文件"
+
+msgid "Browse…"
+msgstr "浏览…"
+
+msgid "Install / Run"
+msgstr "安装 / 运行"
+
+msgid "Add to launcher"
+msgstr "添加到启动器"
+
+msgid "Create or select an environment first."
+msgstr "请先创建或选择运行环境。"
+
+msgid "Wine settings"
+msgstr "Wine 设置"
+
+msgid "Uninstall programs"
+msgstr "卸载程序"
+
+msgid "Stop environment"
+msgstr "停止环境"
+
+msgid "Could not stop the environment."
+msgstr "无法停止运行环境。"
+
+msgid "Stop requested."
+msgstr "已请求停止。"
+
+msgid "Could not start the Wine helper."
+msgstr "无法启动 Wine 运行工具。"
+
+msgid "Registered applications"
+msgstr "已注册的应用"
+
+msgid "Launch"
+msgstr "启动"
+
+msgid "Ready"
+msgstr "就绪"
+
+msgid "Open logs"
+msgstr "打开日志"
+
+msgid "Close Windows applications or stop the environment before closing this window."
+msgstr "请先关闭 Windows 应用或停止运行环境，再关闭此窗口。"
+
+msgid "Could not read Wine environments."
+msgstr "无法读取 Wine 运行环境。"
+
+msgid "Wine is not installed. Install the Wine runtime packages to continue."
+msgstr "尚未安装 Wine，请先安装 Wine 运行依赖。"
+
+msgid "An operation is already running."
+msgstr "已有操作正在执行。"
+
+msgid "Working…"
+msgstr "正在处理…"
+
+msgid "Operation failed. See the details and logs."
+msgstr "操作失败，请查看详情和日志。"
+
+msgid "Finished"
+msgstr "已完成"
+
+msgid "Windows applications"
+msgstr "Windows 应用"
+
+msgid "Select an environment, then choose Install / Run."
+msgstr "选择运行环境，然后点击“安装 / 运行”。"

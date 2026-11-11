@@ -1,0 +1,13 @@
+/build*/
+/obj-*/
+__pycache__/
+*.pyc
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/lingmo-wine/
+/debian/lingmo-wine-dbgsym/
+/debian/*.substvars
+/debian/*.debhelper
+
+/debian/*.debhelper.log

@@ -1,0 +1,6 @@
+lingmo-wine (1.0.0+lingmo5u1) unstable; urgency=medium
+
+  * Initial SDK-based Wine environment manager and on-demand runner.
+  * Add EXE/MSI file association, per-application launchers, and runtime tests.
+
+ -- Lingmo OS Team <team@lingmo.org>  Wed, 11 Nov 2026 12:00:00 +0800

@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: lingmo-wine
+Source: https://github.com/LingmoOS/lingmo-wine
+Files: *
+Copyright: 2026 LingmoOS Contributors
+License: GPL-3.0-or-later
+
+License: GPL-3.0-or-later
+ See /usr/share/common-licenses/GPL-3 for the complete license.

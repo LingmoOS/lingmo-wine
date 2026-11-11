@@ -1,0 +1,27 @@
+Source: lingmo-wine
+Section: utils
+Priority: optional
+Maintainer: Lingmo OS Team <team@lingmo.org>
+Build-Depends: cmake (>= 3.22),
+               debhelper-compat (= 13),
+               lingmo-sdk-dev,
+               gettext,
+               python3
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/LingmoOS/lingmo-wine
+
+Package: lingmo-wine
+Architecture: amd64
+Depends: ${misc:Depends}, ${shlibs:Depends},
+         python3,
+         wine,
+         wine64,
+         fonts-wine,
+         xwayland,
+         xdg-utils,
+         xdg-desktop-portal-lingmo
+Recommends: wine32:i386
+Description: Windows application manager for the Lingmo desktop
+ Manage per-application Wine environments, installers, launchers and logs
+ with a native Lingmo interface. Wine runs only while an application is open.

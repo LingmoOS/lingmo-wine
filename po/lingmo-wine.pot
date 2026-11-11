@@ -1,0 +1,92 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Windows Applications"
+msgstr ""
+
+msgid "Create an environment for each application, or reuse one for related programs."
+msgstr ""
+
+msgid "Environment"
+msgstr ""
+
+msgid "Environment or application name"
+msgstr ""
+
+msgid "Create environment"
+msgstr ""
+
+msgid "Select an EXE or MSI file"
+msgstr ""
+
+msgid "Browse…"
+msgstr ""
+
+msgid "Install / Run"
+msgstr ""
+
+msgid "Add to launcher"
+msgstr ""
+
+msgid "Create or select an environment first."
+msgstr ""
+
+msgid "Wine settings"
+msgstr ""
+
+msgid "Uninstall programs"
+msgstr ""
+
+msgid "Stop environment"
+msgstr ""
+
+msgid "Could not stop the environment."
+msgstr ""
+
+msgid "Stop requested."
+msgstr ""
+
+msgid "Could not start the Wine helper."
+msgstr ""
+
+msgid "Registered applications"
+msgstr ""
+
+msgid "Launch"
+msgstr ""
+
+msgid "Ready"
+msgstr ""
+
+msgid "Open logs"
+msgstr ""
+
+msgid "Close Windows applications or stop the environment before closing this window."
+msgstr ""
+
+msgid "Could not read Wine environments."
+msgstr ""
+
+msgid "Wine is not installed. Install the Wine runtime packages to continue."
+msgstr ""
+
+msgid "An operation is already running."
+msgstr ""
+
+msgid "Working…"
+msgstr ""
+
+msgid "Operation failed. See the details and logs."
+msgstr ""
+
+msgid "Finished"
+msgstr ""
+
+msgid "Windows applications"
+msgstr ""
+
+msgid "Select an environment, then choose Install / Run."
+msgstr ""
