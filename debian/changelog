@@ -1,3 +1,13 @@
+lingmo-wine (1.0.1+lingmo5u1) unstable; urgency=medium
+
+  * Add shared action state, global menus and compact local fallback.
+  * Fill the window header width so close, minimize and maximize are visible.
+  * Use a glass navigation sidebar and opaque content with separate install,
+    application, environment and log pages. Preserve input across page switches.
+  * Test window button bounds and clicking Close at multiple sizes and scales.
+
+ -- Lingmo OS Team <team@lingmo.org>  Wed, 11 Nov 2026 16:58:00 +0800
+
 lingmo-wine (1.0.0+lingmo5u1) unstable; urgency=medium
 
   * Initial SDK-based Wine environment manager and on-demand runner.

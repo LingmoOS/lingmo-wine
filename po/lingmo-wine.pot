@@ -90,3 +90,39 @@ msgstr ""
 
 msgid "Select an environment, then choose Install / Run."
 msgstr ""
+
+msgid "Environments"
+msgstr ""
+
+msgid "Logs"
+msgstr ""
+
+msgid "Application name"
+msgstr ""
+
+msgid "Environment name"
+msgstr ""
+
+msgid "Each environment keeps its own Windows settings and installed programs."
+msgstr ""
+
+msgid "Select an EXE or MSI file and the environment to use."
+msgstr ""
+
+msgid "After installation, select the installed EXE on the Install / Run page, then name it here."
+msgstr ""
+
+msgid "Menu"
+msgstr ""
+
+msgid "File"
+msgstr ""
+
+msgid "Quit"
+msgstr ""
+
+msgid "View"
+msgstr ""
+
+msgid "Applications"
+msgstr ""

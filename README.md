@@ -72,3 +72,35 @@ UI captures, and mocked Builder tests on amd64/arm64/i386. No real Wine runtime
 or Windows executable was installed or run on the host. Actual EXE/MSI,
 32-bit/64-bit behavior, graphics acceleration and live ISO installation remain
 acceptance tests for a Wine-enabled system.
+
+## Window layout
+
+The window follows the Lingmo application design specification's left/right
+material structure: a 224 logical-pixel glass sidebar holds the left-aligned
+application title, shared environment selection and page navigation. The right
+content and its window-control area are opaque. Install / Run, Registered
+applications, Environments and Logs are separate pages; switching pages keeps
+input fields, selected environments and running operations alive. Without
+compositor glass support only the sidebar falls back to a theme surface.
+
+The headless window test covers light/dark themes, 100%/150% scale, minimum
+and expanded sizes, page exclusivity, preserved input, material alpha boundaries,
+and clicking the actual Close button. Headless transparent pixels and material
+requests do not prove real compositor blur; verify that in a live Lingmo session.
+
+## Application actions and menus
+
+The status bar menu is exported through com.canonical.dbusmenu and registered
+as a nonzero single-window ID. The compact titlebar fallback stays visible
+until the registrar acknowledges registration. Losing or restarting the
+registrar restores it; a failed or timed-out registration never hides it.
+Registration replies are guarded by a generation counter. The fallback and
+global menu share the same actions as the buttons. Ctrl+O opens the chooser,
+Ctrl+L opens logs, and Ctrl+Q uses the same guarded quit action as Close.
+
+Actions are disabled when Wine, an environment, a valid name or an appropriate
+file extension is missing, or another task owns the manager. The helper still
+validates paths and locks prefixes; UI validation is not a replacement for it.
+D-Bus tests exercise successful/rejected registration, owner loss/restart,
+disabled/hidden actions and menu-state updates. Real status bar display still
+requires a live Lingmo session check.

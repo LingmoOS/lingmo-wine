@@ -6,6 +6,7 @@ Build-Depends: cmake (>= 3.22),
                debhelper-compat (= 13),
                lingmo-sdk-dev,
                gettext,
+               dbus-daemon,
                python3
 Standards-Version: 4.7.2
 Rules-Requires-Root: no

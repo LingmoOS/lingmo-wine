@@ -12,7 +12,7 @@ int main(int argc, char **argv)
         if (arg == "--help" || arg == "-h") {
             std::puts("Usage: lingmo-wine [--open FILE | --launch ID]"); return 0;
         }
-        if (arg == "--version") { std::puts("lingmo-wine 1.0.0"); return 0; }
+        if (arg == "--version") { std::puts("lingmo-wine 1.0.1"); return 0; }
         if ((arg == "--open" || arg == "--launch" || arg == "--capture") && i + 1 < argc) {
             (arg == "--open" ? file : arg == "--launch" ? application : capture) = argv[++i];
         } else if (!arg.starts_with("-") && file.empty()) {

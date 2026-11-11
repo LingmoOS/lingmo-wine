@@ -90,3 +90,39 @@ msgstr "Windows 应用"
 
 msgid "Select an environment, then choose Install / Run."
 msgstr "选择运行环境，然后点击“安装 / 运行”。"
+
+msgid "Environments"
+msgstr "环境管理"
+
+msgid "Logs"
+msgstr "日志"
+
+msgid "Application name"
+msgstr "应用名称"
+
+msgid "Environment name"
+msgstr "环境名称"
+
+msgid "Each environment keeps its own Windows settings and installed programs."
+msgstr "每个环境分别保存 Windows 设置和已安装程序。"
+
+msgid "Select an EXE or MSI file and the environment to use."
+msgstr "选择 EXE 或 MSI 文件及其运行环境。"
+
+msgid "After installation, select the installed EXE on the Install / Run page, then name it here."
+msgstr "安装完成后，在“安装 / 运行”页面选择已安装的 EXE，再在这里为应用命名。"
+
+msgid "Menu"
+msgstr "菜单"
+
+msgid "File"
+msgstr "文件"
+
+msgid "Quit"
+msgstr "退出"
+
+msgid "View"
+msgstr "视图"
+
+msgid "Applications"
+msgstr "应用"
